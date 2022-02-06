@@ -14,7 +14,7 @@ CAN_message_t msg;
   1. I updated the SD so that it should add headers as the first line whenever a new
   datafile is created (untested)
   2. The EEPROM is currently set to save the hours/minutes whenever the reset button is
-  used IF debugMode is on, otherwise reset will reset the counter (what it is intended
+  used IF debugM0de is on, otherwise reset will reset the counter (what it is intended
   to do
 
   QUESTIONS: 
@@ -403,8 +403,14 @@ void LText(double per, int x, int y, float FontSize, int dec, int dig, String st
 void SDSave()
 {
   String dataString = "";
-//   dataString += String(logTime);
-//   dataString += ",";
+  dataString += String(millis());
+  dataString += ",";
+  dataString += String(seconds);
+  dataString += ",";
+  dataString += String(hours);
+  dataString += ",";
+  dataString += String(minutes);
+  dataString += ",";
   dataString += String(voltage);
   dataString += ",";
   dataString += String(aux);
@@ -422,6 +428,8 @@ void SDSave()
   dataString += String(battemp);
   dataString += ",";
   dataString += String(KWHR);
+  dataString += ",";
+  dataString += String(AMPHR);
   dataString += ",";
   File dataFile = SD.open(fileNameChar,FILE_WRITE);
   if(dataFile) {
@@ -463,8 +471,14 @@ void SDNew()
   }
   File dataFile = SD.open(fileNameChar,FILE_WRITE);
   String nameString = "";
-//   nameString += "Time(ms)";
-//   nameString += ",";
+  nameString += "Active Time(ms)";
+  nameString += ",";
+  nameString += "Flight Time(ms)";
+  nameString += ",";
+  nameString += "Hours";
+  nameString += ",";
+  nameString += "Minutes";
+  nameString += ",";
   nameString += "Voltage";
   nameString += ",";
   nameString += "Aux";
@@ -485,7 +499,7 @@ void SDNew()
   nameString += ",";
   nameString += "Ah";
   while(!dataFile);
-  dataFile.print(nameString);
+  dataFile.println(nameString);
   dataFile.close();
 }
 
@@ -579,7 +593,7 @@ void visual() {
   vertbardisplay(166, 270, 195, 445, 15, 23, 130, 9);
   vertbardisplay(268, 270, 297, 445, 15, 23, 130, 9);
   linedisp(60, 30, 130, 3, 10, 20);
-  battery(400, 105, 150, 100, 3, 50);
+  battery(400, 105, 150, 100, 7, 50);
 
   tft.drawLine(0, 230, 330, 230, TFT_GREY); // segmenting display into five parts (top, flight time, energy consumed, temperatures, and battery information)
   tft.drawLine(330, 230, 330, 480, TFT_GREY);
@@ -609,7 +623,6 @@ void setup() {
   EEPROM.get(eeAddress,KWHR);
   eeAddress+= sizeof(KWHR);
   EEPROM.get(eeAddress,AMPHR);
-//  eeAddress += sizeof(long int);
 
   visual();
 
@@ -625,25 +638,7 @@ void setup() {
 
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
-
-  Serial.print("Initializing SD card...");
-
-  // see if the card is present and can be initialized:
-  if (!SD.begin(BUILTIN_SDCARD)) {
-    Serial.println("Card failed, or not present");
-  }
-  else
-  {
-    Serial.println("card initialized.");
-    logging = true;
-    //intialize SD Card name
-    String FILENAME = String(fileDir) + "/" + String(fileName) + "000.csv";
-    for(int i = 0; i < FILENAME.length();i++)
-    {
-      fileNameChar[i] = FILENAME[i];
-    }
-    SDNew(); //Set a new directory (if neccessary)
-  }
+ 
   //define inital values of rotary encoder
   rQ = digitalRead(3);
   rK = digitalRead(4);
@@ -701,7 +696,10 @@ void loop() {
   }
   
   //log to SD Card if logging enabled
-  if(logging) SDSave();
+  if(logging && millis()%100 <= 5)
+  {
+    SDSave();
+  } 
 
   //read data from canbus
   if (can1.read(msg)) {
@@ -785,25 +783,29 @@ void loop() {
     canON = overideSensors; 
   }
   
-  // calculating hours and minutes from value for flight time
-  if(rpm > 500)
+  // will update flight time cummilative seconds ONLY if RPM > 500
+  if(rpm>500)
   {
     if(newTime)
     {
-      if(!debugMode)
-      {
-        newSeconds =  millis()/1000;
-      }
+      if(debugMode) newSeconds =  millis()/10;
       else
       {
-        newSeconds = millis()/10;
+        newSeconds = millis()/50;
       }
       newTime = false;
     }
-    seconds = secondsSum + (millis()/10 - newSeconds);
+
+    if(debugMode) seconds = secondsSum + (millis()/10 - newSeconds);
+    else {
+      seconds = secondsSum + (millis()/50 - newSeconds);
+    }
   } else if (!newTime)
   {
-    secondsSum = secondsSum + (millis()/10 - newSeconds);
+    if(debugMode) secondsSum = secondsSum + (millis()/10 - newSeconds);
+    else{
+      secondsSum = secondsSum + (millis()/50 - newSeconds);
+    }
     newTime = true;
   }
   hours = (seconds/3600 )%100;
@@ -959,8 +961,8 @@ void loop() {
 
  
 
-    fillbat(400, 105, 150, 100, 3, 50, bat, TFT_GREEN);
-    invfillbat(400, 105, 150, 100, 3, 50, bat, TFT_BLACK);
+    fillbat(400, 105, 150, 100, 7, 50, bat, TFT_GREEN);
+    invfillbat(400, 105, 150, 100, 7, 50, bat, TFT_BLACK);
     
     if (count1 > 10) {
 
@@ -1005,10 +1007,10 @@ void loop() {
 
     Serial.println("Saving for powerdown...");
     EEPROM.put(eeAddress, seconds);
-    // eeAddress+= sizeof(seconds);
-    // EEPROM.put(eeAddress,KWHR);
-    // eeAddress+= sizeof(KWHR);
-    // EEPROM.put(eeAddress,AMPHR);
+    eeAddress+= sizeof(seconds);
+    EEPROM.put(eeAddress,KWHR);
+    eeAddress+= sizeof(KWHR);
+    EEPROM.put(eeAddress,AMPHR);
 
     singleSave = singleSave + 1;
 
@@ -1027,7 +1029,6 @@ void loop() {
       tft.setFontScale(1);
       //if reset is selected
       if (arrowTOG == true) {
-        //seconds = 0;
         if(!debugMode) //clear currently stored time
         {
           secondsSum = 0;
@@ -1059,14 +1060,43 @@ void loop() {
       }
       //if SD card is selected
       if (arrowTOG == false) {
-
         logging = !logging;
+        static boolean logfailed;
+        if(logging)
+        {
+          if (!SD.begin(BUILTIN_SDCARD)) {
+            Serial.println("Card failed, or not present");
+            logging = false;
+            logfailed = true;
+          }
+          else
+          {
+            logging = true;
+            logfailed = false;
+            Serial.println("card initialized.");
+            //intialize SD Card name
+            String FILENAME = String(fileDir) + "/" + String(fileName) + "000.csv";
+            for(int i = 0; i < FILENAME.length();i++)
+            {
+              fileNameChar[i] = FILENAME[i];
+            }
+            SDNew(); //Set a new directory (if neccessary)
+          }
+        }
+        else
+        {
+          logfailed = false;
+        }
         tft.fillRect(650, 440, 100, 30, TFT_BLACK);
         tft.setCursor(655, 440);
 
-        if (logging == true) {
+        if(logfailed)
+        {
+          tft.println("FAILED");
+        }
+        else if (logging) { 
+          
           tft.println("SD ON");
-          SDNew();
         }
         else {
           tft.println("SD OFF");
