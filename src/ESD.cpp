@@ -11,16 +11,7 @@ CAN_message_t msg;
 
 /*
   NOTES:
-  1. I updated the SD so that it should add headers as the first line whenever a new
-  datafile is created (untested)
-  2. The EEPROM is currently set to save the hours/minutes whenever the reset button is
-  used IF debugM0de is on, otherwise reset will reset the counter (what it is intended
-  to do
-
-  QUESTIONS: 
-  1. Will we be able to use GPS data? If so, I think that logging the actual time to the 
-  SD Card as apposed to the seconds (which only change when rpm > 500) would be the 
-  better option
+  1. I have not tested the smoothing, but it should work
 */
 
 //pins
@@ -83,8 +74,15 @@ String storesave = "";
 float voltage = 0;
 float voltageprev = 0;
 int voltyprev = 425;
+
+#define numReadings 10
 float current = 0;
 float currentprev = 0;
+float currentReadings[numReadings];
+int currentIndex =0;
+float currentTotal = 0;
+long int currentPreMillis = 0;
+
 float rpm = 0;
 float rpmprev = 0;
 float rpmdegprev = 240;
@@ -707,7 +705,21 @@ void loop() {
     if (msg.id == 346095618) {
 
       //voltage = (msg.buf[0] + (256 * msg.buf[1])) / 57.45;
-      current = (msg.buf[2] + (256 * msg.buf[3])) / 10;
+      //implement smoothing to keep track of current by taking a certain number of samples in a second and updating the average every second
+      if(millis() - currentPreMillis >= 1000/numReadings)
+      {
+        currentTotal -= currentReadings[currentIndex];
+        currentReadings[currentIndex] = (msg.buf[2] + (256 * msg.buf[3])) / 10;
+        currentTotal += currentReadings[currentIndex];
+        currentIndex++;
+        if(currentIndex >= numReadings)
+        {
+          currentIndex = 0;
+          current = currentTotal/numReadings;
+        }
+        currentPreMillis = millis();
+      }
+
       rpm = (msg.buf[4] + (256 * msg.buf[5]) + (65536 * msg.buf[6])) * 10;
 
     }
