@@ -27,7 +27,7 @@ CAN_message_t msg;
 #define rotaryButton 2  //define rotary encoder
 
 //debug tools
-#define debugMode false     //use to enable all debug commands
+#define debugMode true     //use to enable all debug commands
 #define overideSensors (debugMode && true)  //overide "X" if sensors are not connected
 #define disableAudio (debugMode && true)  //disable teensy onboard audio
 
@@ -605,6 +605,10 @@ void setup() {
 
   EEPROM.get(eeAddress, secondsSum);
   seconds = secondsSum;
+  eeAddress+= sizeof(secondsSum);
+  EEPROM.get(eeAddress,KWHR);
+  eeAddress+= sizeof(KWHR);
+  EEPROM.get(eeAddress,AMPHR);
 //  eeAddress += sizeof(long int);
 
   visual();
@@ -821,29 +825,16 @@ void loop() {
     if (power > 0){
       KWHR = KWHR + ((ATB - ATBprev) * 0.00000027777777) * (power);
       
-    } else if (overideSensors) {
-      KWHR += .1;
-      if(KWHR > 99.0)
-      {
-        KWHR = 0;
-      }
-    }
+    } 
     //ensure KWHR stays positive
     if (KWHR < 0){
-      AMPHR = 0;
+      KWHR = 0;
     }
+    
     
     //function to determine the current AMPHR
     if (current > 0){
     AMPHR = AMPHR + ((ATB - ATBprev) * 0.000000277777) * (current);
-    }
-    else if(overideSensors)
-    {
-      if(AMPHR >= 49.9)
-      {
-        AMPHR = 0;
-      }
-      AMPHR += .1;
     }
     
     if (AMPHR < 0){
@@ -1013,7 +1004,11 @@ void loop() {
     eeAddress = 0;
 
     Serial.println("Saving for powerdown...");
-    EEPROM.put(eeAddress, secondsSum);
+    EEPROM.put(eeAddress, seconds);
+    // eeAddress+= sizeof(seconds);
+    // EEPROM.put(eeAddress,KWHR);
+    // eeAddress+= sizeof(KWHR);
+    // EEPROM.put(eeAddress,AMPHR);
 
     singleSave = singleSave + 1;
 
@@ -1032,24 +1027,31 @@ void loop() {
       tft.setFontScale(1);
       //if reset is selected
       if (arrowTOG == true) {
-        KWHR = 0;
-        AMPHR = 0;
         //seconds = 0;
-        if(debugMode) //if debug mode is active, store current value when reset it selected
+        if(!debugMode) //clear currently stored time
         {
-          Serial.println("Saving for powerdown...");
-          EEPROM.put(eeAddress, seconds);
-        }
-        else //clear currently stored time
-        {
+          secondsSum = 0;
+          seconds = 0;
+          KWHR = 0;
+          AMPHR = 0;
+          eeAddress = 0;
           for (int i = 0 ; i < EEPROM.length() ; i++) 
           {
             EEPROM.write(i, 0);
           }
+          Serial.println("Reseting...");
+        }
+        else //if debug mode is active, store current value when reset it selected
+        {
+          eeAddress = 0;
+          Serial.println("Saving for powerdown...");
+          EEPROM.put(eeAddress,seconds);
+          eeAddress+= sizeof(seconds);
+          EEPROM.put(eeAddress,KWHR);
+          eeAddress+= sizeof(KWHR);
+          EEPROM.put(eeAddress,AMPHR);
 
         }
-        //eeAddress += sizeof(float);
-        //EEPROM.put(eeAddress, AMPHR);
 
         tft.fillRect(650, 390, 100, 30, TFT_BLACK);
         resetlight = true;
@@ -1091,7 +1093,7 @@ void loop() {
   rQ = digitalRead(3);
   rK = digitalRead(4);
   //function for determining which option is selected for rotary encoder (option can't change while button is pressed)
-  if (((rQ != rQi) || (rK != rKi)) && (scrolltime <= millis()) && !buttonON && canON) {
+  if (((rQ != rQi) || (rK != rKi)) && (scrolltime <= millis()) && !buttonON) {
     arrowTOG = !arrowTOG;
     tft.fillRect(600,390,40,80,TFT_BLACK);
     scrolltime = millis() + 200;
