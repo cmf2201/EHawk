@@ -401,7 +401,7 @@ void LText(double per, int x, int y, float FontSize, int dec, int dig, String st
 void SDSave()
 {
   String dataString = "";
-  dataString += String(millis());
+  dataString += String(millis()-sdTime);
   dataString += ",";
   dataString += String(seconds);
   dataString += ",";
@@ -441,6 +441,7 @@ void SDSave()
 //function to create a new SD File
 void SDNew()
 {
+  sdTime = millis();
   //create a directory to hold the data
   char FILEDirChar[sizeof(fileDir)-1];
   for (int i = 0; i < sizeof(fileDir); i++)
@@ -581,12 +582,13 @@ void visual() {
   tft.println(":");
   tft.setCursor(185, 175);
   tft.println("RPM");
-  tft.setCursor(585, 155);
+  tft.setCursor(595, 175);
   tft.println("KW");
   tft.setFontScale(1);
   
   circledisplay(200, 118, 95, 15, -30, 240, degred2, degyellow2, deggreen, degyellow1); // calling all static display symbols
-  circledisplay(600, 108, 90, 15, -30, 240, 0, 20, 270, 270);
+
+  circledisplay(600, 118, 95, 15, -30, 240, 0, 20, 270, 270);
   vertbardisplay(60, 270, 89, 445, 15, 23, 130, 9);
   vertbardisplay(166, 270, 195, 445, 15, 23, 130, 9);
   vertbardisplay(268, 270, 297, 445, 15, 23, 130, 9);
@@ -595,8 +597,8 @@ void visual() {
 
   tft.drawLine(0, 230, 330, 230, TFT_GREY); // segmenting display into five parts (top, flight time, energy consumed, temperatures, and battery information)
   tft.drawLine(330, 230, 330, 480, TFT_GREY);
-  tft.drawLine(470, 210, 470, 480, TFT_GREY);
-  tft.drawLine(470, 210, 800, 210, TFT_GREY);
+  tft.drawLine(470, 230, 470, 480, TFT_GREY);
+  tft.drawLine(470, 230, 800, 230, TFT_GREY);
   tft.drawLine(330, 250, 470, 250, TFT_GREY);
   tft.drawLine(330, 325, 470, 325, TFT_GREY);
 }
@@ -706,19 +708,16 @@ void loop() {
 
       //voltage = (msg.buf[0] + (256 * msg.buf[1])) / 57.45;
       //implement smoothing to keep track of current by taking a certain number of samples in a second and updating the average every second
-      if(millis() - currentPreMillis >= 1000/numReadings)
+      currentTotal -= currentReadings[currentIndex];
+      currentReadings[currentIndex] = (msg.buf[2] + (256 * msg.buf[3])) / 10;
+      currentTotal += currentReadings[currentIndex];
+      currentIndex++;
+      if(currentIndex >= numReadings)
       {
-        currentTotal -= currentReadings[currentIndex];
-        currentReadings[currentIndex] = (msg.buf[2] + (256 * msg.buf[3])) / 10;
-        currentTotal += currentReadings[currentIndex];
-        currentIndex++;
-        if(currentIndex >= numReadings)
-        {
-          currentIndex = 0;
-          current = currentTotal/numReadings;
-        }
-        currentPreMillis = millis();
+        currentIndex = 0;
       }
+      current = currentTotal/numReadings;
+      currentPreMillis = millis();
 
       rpm = (msg.buf[4] + (256 * msg.buf[5]) + (65536 * msg.buf[6])) * 10;
 
@@ -803,20 +802,20 @@ void loop() {
       if(debugMode) newSeconds =  millis()/10;
       else
       {
-        newSeconds = millis()/50;
+        newSeconds = millis()/1000;
       }
       newTime = false;
     }
 
     if(debugMode) seconds = secondsSum + (millis()/10 - newSeconds);
     else {
-      seconds = secondsSum + (millis()/50 - newSeconds);
+      seconds = secondsSum + (millis()/1000 - newSeconds);
     }
   } else if (!newTime)
   {
     if(debugMode) secondsSum = secondsSum + (millis()/10 - newSeconds);
     else{
-      secondsSum = secondsSum + (millis()/50 - newSeconds);
+      secondsSum = secondsSum + (millis()/1000 - newSeconds);
     }
     newTime = true;
   }
@@ -906,7 +905,7 @@ void loop() {
       LText(((float)((int)(10*power)))/10,550,80,2.75,1,2,"",0,0,0,TFT_WHITE,false);
       LText((int)rpm,135,85,3,0,4,"",0,0,0,TFT_WHITE,true);
       LText((int)(current),646,280,3,0,3,"A",98,30,1,TFT_WHITE,false);
-      LText(cellvoltage,500,345,1,1,2,"/ CELL",68,15,.75,TFT_WHITE,false);
+      LText(cellvoltage,500,345,1,1,2,"V/ CELL",68,15,.75,TFT_WHITE,false);
       LText((int)voltage,480,280,3,0,3,"V",98,29,1,TFT_WHITE,false);
       LText(mottemp,60,450,1,0,2,"",0,0,0,TFT_WHITE,false);
       LText(contemp,166,450,1,0,2,"",0,0,0,TFT_WHITE,false);
@@ -933,8 +932,8 @@ void loop() {
       }
 
       if ((int)(10*powerdegprev) != (int)(10*powerdeg)) {
-        dialcirc(600, 108, 88, 20, powerdegprev, 15, TFT_BLACK, TFT_BLACK);
-        dialcirccolor(600, 108, 88, 20, powerdeg, 15, TFT_BLUE, -30, 240, degred2, degyellow2, deggreen, degyellow1);
+        dialcirc(600, 118, 93, 22, powerdegprev, 30, TFT_BLACK, TFT_BLACK);
+        dialcirccolor(600, 118, 93, 20, powerdeg, 15, TFT_BLUE, -30, 240, degred2, degyellow2, deggreen, degyellow1);
       }
 
       if (mottemp != mottempprev) {
@@ -1016,17 +1015,17 @@ void loop() {
   if (aux <= 12.0 && singleSave && !debugMode) {
 
     eeAddress = 0;
-
-    Serial.println("Saving for powerdown...");
     EEPROM.put(eeAddress, seconds);
     eeAddress+= sizeof(seconds);
     EEPROM.put(eeAddress,KWHR);
     eeAddress+= sizeof(KWHR);
     EEPROM.put(eeAddress,AMPHR);
 
-    singleSave = singleSave + 1;
+    Serial.println("Saving for powerdown...");
+    singleSave = false;
 
   }
+  
   if(aux > 12.0) singleSave = true;
 
   
