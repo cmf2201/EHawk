@@ -67,8 +67,12 @@ bool READING1 = false;
 bool READING2 = false;
 char str1[30]; //Initialized variable to store recieved data
 char str2[30];
+int charnum1 =0;
+int charnum2 =0;
 String storesave1 = "";
 String storesave2 = "";
+String Serial1Reading = "";
+String Serial2Reading = "";
 String storesave = "";
 
 float voltage = 0;
@@ -651,26 +655,27 @@ void setup() {
 void loop() {
   //------------------------------------------------------------------------
   //these 2 functions takes data from Serial1 line and stores the data from it into
-  //a string called "store save". Serial Readings must begin with ";"
-  if ((Serial1.available()) && (READING1 == false)) {
-    TXRXtime1 = millis() + 10;
-    READING1 = true;
-  } 
+  //a string called "store save". Serial Readings must begin with ";", and end with "/"
   
-  if ((TXRXtime1 < millis()) && (READING1 == true)) {
-    int i = 0;
-    storesave1 = ",";
-    while (Serial1.available() && i < 30) {
-      str1[i++] = Serial1.read();
-      if (String(str1[0]) != ";") {
-        break;
-      }
-      if (i > 0) {
-        storesave1 += String(str1[i]);
-      }
+  while (Serial1.available()) {
+    str1[charnum1] = Serial1.read();
+    if (str1[0] != ';') {
+      charnum1 = 0;
+      break;
     }
-    str1[i++] = '\0';
-    READING1 = false;
+    if (charnum1 > 0) {
+      if(charnum1 == 1)
+      {
+        storesave1 = "";
+      }
+      storesave1 += String(str1[charnum1]);
+    }
+    if(charnum1 > 100 || str1[charnum1] == '/')
+    {
+      charnum1 = 0;
+      Serial1Reading = storesave1; 
+      break;
+    }
   }
   
   if ((Serial2.available()) && (READING2 == false)) {
@@ -981,7 +986,6 @@ void loop() {
       countdown(countper);
 
     }
-
     else {
       if (pressedTime == 0) {
         tft.fillRect(652, 428, 96, 6, TFT_GREEN);
